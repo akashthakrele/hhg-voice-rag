@@ -1,0 +1,48 @@
+# ── Core Framework ──────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# ── LangGraph Orchestration ─────────────────────────────────
+langgraph==0.2.60
+langchain-core==0.3.28
+
+# ── Vector DB ───────────────────────────────────────────────
+qdrant-client==1.12.1
+
+# ── Embeddings ──────────────────────────────────────────────
+sentence-transformers>=3.3.1
+torch>=2.6.0
+
+# ── LLM Generation ─────────────────────────────────────────
+groq==0.13.0
+
+# ── Dataset (streaming) ────────────────────────────────────
+datasets==3.2.0
+
+# ── Audio Processing ───────────────────────────────────────
+pydub==0.25.1
+soundfile==0.12.1
+numpy==1.26.4
+
+# ── HTTP / API Clients ─────────────────────────────────────
+httpx==0.28.1
+aiohttp==3.11.11
+tenacity==9.0.0
+
+# ── Chunking & NLP ─────────────────────────────────────────
+tiktoken==0.8.0
+nltk==3.9.1
+
+# ── Observability / Metrics ─────────────────────────────────
+structlog==24.4.0
+
+# ── Testing ─────────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1
+
+# ── Linting / Formatting ───────────────────────────────────
+ruff==0.8.6
