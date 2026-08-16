@@ -25,7 +25,7 @@ datasets==3.2.0
 # ── Audio Processing ───────────────────────────────────────
 pydub==0.25.1
 soundfile==0.12.1
-numpy==1.26.4
+numpy>=2.0.0
 
 # ── HTTP / API Clients ─────────────────────────────────────
 httpx==0.28.1
