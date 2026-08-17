@@ -56,3 +56,26 @@ def ensure_collection_exists() -> None:
                 distance=Distance.COSINE,
             ),
         )
+
+
+def recreate_collection(collection_name: str | None = None) -> None:
+    """
+    Delete and recreate the collection for fresh ingests.
+    """
+    from qdrant_client.http.models import Distance, VectorParams
+
+    settings = get_settings()
+    client = get_qdrant_client()
+    col_name = collection_name or settings.qdrant_collection
+
+    existing = [c.name for c in client.get_collections().collections]
+    if col_name in existing:
+        client.delete_collection(collection_name=col_name)
+
+    client.create_collection(
+        collection_name=col_name,
+        vectors_config=VectorParams(
+            size=settings.embedding_dimension,
+            distance=Distance.COSINE,
+        ),
+    )

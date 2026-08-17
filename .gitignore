@@ -37,3 +37,10 @@ benchmarks/*.csv
 # Logs
 logs/
 *.log
+
+# Frontend (no build step, but ignore any accidental node/bundle artifacts)
+node_modules/
+dist/
+.parcel-cache/
+*.tmp
+temp_audio/

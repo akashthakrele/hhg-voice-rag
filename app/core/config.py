@@ -15,11 +15,13 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # ── API Keys ────────────────────────────────────────────
     sarvam_api_key: str = ""
     groq_api_key: str = ""
+    hf_token: str = ""
 
     # ── Qdrant ──────────────────────────────────────────────
     qdrant_url: str = "http://localhost:6333"
@@ -30,8 +32,8 @@ class Settings(BaseSettings):
     embedding_dimension: int = 1024
 
     # ── LLM ─────────────────────────────────────────────────
-    groq_model: str = "llama-3.3-70b-versatile"
-    groq_fallback_model: str = "llama-3.1-8b-instant"
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_fallback_model: str = "openai/gpt-oss-20b"
 
     # ── Chunking ────────────────────────────────────────────
     chunk_size: int = 256
@@ -58,7 +60,15 @@ class Settings(BaseSettings):
     retry_base_delay: float = 0.5
 
 
+import os
+
 @lru_cache
 def get_settings() -> Settings:
     """Cached settings singleton."""
-    return Settings()
+    settings = Settings()
+    if settings.hf_token and settings.hf_token.strip():
+        token_clean = settings.hf_token.strip()
+        os.environ["HF_TOKEN"] = token_clean
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = token_clean
+        os.environ["HUGGINGFACE_HUB_TOKEN"] = token_clean
+    return settings

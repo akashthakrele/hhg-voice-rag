@@ -18,7 +18,7 @@ from app.schemas import (
 from app.services.pipeline import run_voice_pipeline, run_text_pipeline
 from app.services.benchmark import run_benchmark, timings_to_csv
 from app.services.ingestion import ingest_to_qdrant
-from app.core.db import check_qdrant_health
+from app.core.db import check_qdrant_health, recreate_collection
 from app.utils.audio import preprocess_audio, validate_audio_size
 from app.exceptions import AudioValidationError, RAGPipelineError
 
@@ -128,17 +128,20 @@ async def ingest_endpoint(
     max_records: int = 1000,
     language: str = "en",
     strategy: str = "metadata_aware",
+    clear_existing: bool = False,
 ):
     """
     Trigger MSMARCO-XI data ingestion into Qdrant.
 
     Runs in background. Use /health to check if collection is populated.
+    Pass clear_existing=True to wipe and recreate the collection first.
     """
     background_tasks.add_task(
         ingest_to_qdrant,
         strategy=strategy,
         max_records=max_records,
         language=language,
+        clear_existing=clear_existing,
     )
 
     return {
@@ -146,4 +149,14 @@ async def ingest_endpoint(
         "max_records": max_records,
         "language": language,
         "strategy": strategy,
+        "clear_existing": clear_existing,
     }
+
+
+@router.post("/collection/clear", tags=["admin"])
+async def clear_collection_endpoint():
+    """
+    Clear and recreate the Qdrant collection for fresh ingestion.
+    """
+    recreate_collection()
+    return {"message": "Collection cleared and recreated successfully"}

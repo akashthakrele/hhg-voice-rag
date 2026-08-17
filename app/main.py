@@ -6,10 +6,12 @@ Voice-Enabled RAG Pipeline — HH Goa Task 2.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.core.config import get_settings
@@ -48,6 +50,15 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("qdrant_init_failed", error=str(exc))
 
+    # Initialize Hugging Face authentication
+    if settings.hf_token and settings.hf_token.strip():
+        try:
+            import huggingface_hub
+            huggingface_hub.login(token=settings.hf_token.strip(), add_to_git_credential=False)
+            logger.info("hf_token_configured")
+        except Exception as exc:
+            logger.debug("hf_login_skipped", error=str(exc))
+
     yield
 
     logger.info("shutdown")
@@ -75,13 +86,7 @@ app.add_middleware(
 # Mount routes
 app.include_router(router, prefix="/api/v1")
 
-
-# Root redirect to docs
-@app.get("/", tags=["system"])
-async def root():
-    """Root endpoint — redirects to API docs."""
-    return {
-        "message": "Voice-Enabled RAG Pipeline — HH Goa Task 2",
-        "docs": "/docs",
-        "health": "/api/v1/health",
-    }
+# Mount frontend static files at root
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+if FRONTEND_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

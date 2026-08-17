@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice-Enabled RAG Pipeline</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <img src="/assets/logo.svg" alt="Voice RAG Logo" class="brand-logo" width="32" height="32" />
+        <div>
+          <h1 class="brand-title">Voice RAG Pipeline</h1>
+          <p class="brand-subtitle">Sub-200ms Voice-to-Answer with LangGraph &amp; Guardrails</p>
+        </div>
+      </div>
+      <div class="header-status">
+        <div id="health-indicator" class="status-badge status-loading" title="Checking backend health...">
+          <span class="status-dot"></span>
+          <span id="health-text">Checking System...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="main-layout">
+      <!-- Left Column: Input Controls -->
+      <section class="panel input-panel">
+        <div class="panel-header">
+          <h2>Query Input</h2>
+          <div class="language-picker">
+            <label for="language-select">Language:</label>
+            <select id="language-select" class="select-input">
+              <option value="hi-IN" selected>Hindi (hi-IN)</option>
+              <option value="en">English (en)</option>
+              <option value="en-IN">English (India) (en-IN)</option>
+              <option value="mr-IN">Marathi (mr-IN)</option>
+              <option value="bn-IN">Bengali (bn-IN)</option>
+              <option value="ta-IN">Tamil (ta-IN)</option>
+              <option value="te-IN">Telugu (te-IN)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Voice Query Section -->
+        <div class="voice-card">
+          <div class="voice-controls">
+            <button id="record-btn" class="record-btn state-idle" type="button" aria-label="Record voice query">
+              <div class="mic-icon-wrapper">
+                <svg class="mic-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" fill="currentColor"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="22"/>
+                  <line x1="8" y1="22" x2="16" y2="22"/>
+                </svg>
+              </div>
+              <span id="record-label" class="record-label">Click to Speak</span>
+            </button>
+            
+            <div id="recording-timer" class="recording-timer hidden">00:00</div>
+          </div>
+
+          <div id="audio-preview-container" class="audio-preview-container hidden">
+            <audio id="audio-preview" controls class="audio-player"></audio>
+            <button id="re-record-btn" class="btn btn-secondary btn-sm" type="button">Discard &amp; Re-record</button>
+          </div>
+
+          <p class="input-hint">Microphone audio is streamed to <code>/api/v1/query/voice</code> for STT + RAG.</p>
+        </div>
+
+        <!-- Divider -->
+        <div class="divider">
+          <span>OR USE TEXT</span>
+        </div>
+
+        <!-- Text Query Section -->
+        <form id="text-query-form" class="text-form">
+          <div class="text-input-group">
+            <textarea
+              id="text-query-input"
+              class="textarea-input"
+              rows="3"
+              placeholder="Ask a question (e.g. What is the speed of light?)..."
+              required
+            ></textarea>
+            <div class="text-form-footer">
+              <span class="shortcut-hint">Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit</span>
+              <button id="submit-text-btn" class="btn btn-primary" type="submit">
+                <span class="btn-text">Send Query</span>
+                <span class="btn-spinner hidden"></span>
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <!-- Quick Demo Prompts -->
+        <div class="quick-prompts">
+          <span class="quick-prompts-title">Sample Prompts:</span>
+          <div class="prompt-chips">
+            <button type="button" class="prompt-chip" data-query="What is the speed of light in vacuum?" data-lang="en">Speed of light (EN)</button>
+            <button type="button" class="prompt-chip" data-query="भारत की राजधानी क्या है और इसकी जनसंख्या कितनी है?" data-lang="hi-IN">भारत की राजधानी (HI)</button>
+            <button type="button" class="prompt-chip" data-query="How does vector indexing in Qdrant work?" data-lang="en">Vector Search (EN)</button>
+          </div>
+        </div>
+
+        <!-- Edge Case / Notification Banner -->
+        <div id="error-banner" class="alert-banner alert-error hidden">
+          <div class="alert-header">
+            <strong id="error-title">Request Failed</strong>
+            <button id="error-close-btn" class="alert-close" type="button" aria-label="Close error">&times;</button>
+          </div>
+          <p id="error-message">An unexpected error occurred.</p>
+          <div id="error-details-wrapper" class="hidden">
+            <button id="toggle-error-details" class="btn-link" type="button">Show technical details</button>
+            <pre id="error-details" class="error-details hidden"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Response & Metrics Panel -->
+      <section class="panel response-panel">
+        <div class="panel-header">
+          <h2>RAG Response &amp; Latency</h2>
+          <div id="query-meta-badges" class="header-badges">
+            <span id="source-badge" class="badge badge-secondary hidden">Text</span>
+            <span id="target-latency-badge" class="badge hidden">Target &lt;200ms</span>
+          </div>
+        </div>
+
+        <!-- Initial Placeholder State -->
+        <div id="placeholder-state" class="empty-state">
+          <div class="empty-icon">⚡</div>
+          <h3>Ready for your query</h3>
+          <p>Click the microphone button to speak or enter a question to view answer generation, live latency breakdown, and grounding validation.</p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="loading-state hidden">
+          <div class="spinner-large"></div>
+          <p id="loading-stage-text">Processing query through LangGraph pipeline...</p>
+          <span class="loading-subtext">STT &bull; Chunking &bull; Qdrant Retrieval &bull; Groq LLM &bull; Grounding Guard</span>
+        </div>
+
+        <!-- Response Content (shown after query) -->
+        <div id="response-content" class="response-content hidden">
+          <!-- Latency Overview Cards -->
+          <div class="metrics-grid">
+            <div class="metric-card metric-total">
+              <span class="metric-label">Total Latency</span>
+              <div class="metric-value-wrap">
+                <span id="timing-total" class="metric-value">--</span>
+                <span class="metric-unit">ms</span>
+              </div>
+              <span id="timing-status" class="metric-status">Target: &lt;200ms</span>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-label">STT (Sarvam)</span>
+              <div class="metric-value-wrap">
+                <span id="timing-stt" class="metric-value">--</span>
+                <span class="metric-unit">ms</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-label">Retrieval (Qdrant)</span>
+              <div class="metric-value-wrap">
+                <span id="timing-retrieval" class="metric-value">--</span>
+                <span class="metric-unit">ms</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-label">Generation (Groq)</span>
+              <div class="metric-value-wrap">
+                <span id="timing-generation" class="metric-value">--</span>
+                <span class="metric-unit">ms</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-label">Guardrail Check</span>
+              <div class="metric-value-wrap">
+                <span id="timing-guardrail" class="metric-value">--</span>
+                <span class="metric-unit">ms</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grounding & Guardrail Status Banner -->
+          <div class="status-cards-row">
+            <div id="grounding-card" class="status-card status-card-success">
+              <div class="status-card-icon" id="grounding-icon">✓</div>
+              <div class="status-card-content">
+                <span class="status-card-title">Grounding Status</span>
+                <span id="grounding-text" class="status-card-value">Grounded in Context</span>
+              </div>
+            </div>
+
+            <div id="guardrail-card" class="status-card status-card-neutral">
+              <div class="status-card-icon" id="guardrail-icon">🛡️</div>
+              <div class="status-card-content">
+                <span class="status-card-title">Guardrail</span>
+                <span id="guardrail-text" class="status-card-value">Passed (On-Topic)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Guardrail Warning (if triggered) -->
+          <div id="guardrail-alert" class="alert-banner alert-warning hidden">
+            <strong>⚠️ Guardrail Action Triggered</strong>
+            <p id="guardrail-reason-text">Query was flagged or context was insufficient.</p>
+          </div>
+
+          <!-- Transcribed Query Box (if voice) -->
+          <div id="transcribed-box" class="info-box hidden">
+            <span class="info-box-label">Query Transcribed:</span>
+            <p id="transcribed-text" class="info-box-text"></p>
+          </div>
+
+          <!-- Answer Section -->
+          <div class="answer-card">
+            <div class="answer-card-header">
+              <h3>Generated Answer</h3>
+              <button id="copy-answer-btn" class="btn btn-secondary btn-xs" type="button">Copy</button>
+            </div>
+            <div id="answer-text" class="answer-body"></div>
+          </div>
+
+          <!-- Retrieved Chunks Accordion -->
+          <div class="accordion">
+            <button id="toggle-chunks-btn" class="accordion-header" type="button">
+              <span class="accordion-title">
+                Retrieved Context Chunks (<span id="chunks-count">0</span>)
+              </span>
+              <span id="accordion-arrow" class="accordion-arrow">▼</span>
+            </button>
+            <div id="chunks-body" class="accordion-body hidden">
+              <div id="chunks-list" class="chunks-list">
+                <!-- Chunks rendered here -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div>Voice-Enabled RAG Pipeline &bull; Task 2</div>
+      <div>
+        <a href="/docs" target="_blank" class="footer-link">Swagger Docs</a> &bull;
+        <a href="/api/v1/health" target="_blank" class="footer-link">API Health</a>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

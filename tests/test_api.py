@@ -22,12 +22,23 @@ async def client():
 
 @pytest.mark.asyncio
 async def test_root(client: AsyncClient):
-    """Root endpoint returns project info."""
+    """Root endpoint serves frontend HTML UI."""
     response = await client.get("/")
     assert response.status_code == 200
-    data = response.json()
-    assert "Voice-Enabled RAG Pipeline" in data["message"]
-    assert "docs" in data
+    assert "text/html" in response.headers.get("content-type", "")
+    assert "Voice-Enabled RAG Pipeline" in response.text or "Voice RAG Pipeline" in response.text
+
+
+@pytest.mark.asyncio
+async def test_static_assets(client: AsyncClient):
+    """Static assets (CSS, JS) are served correctly."""
+    css_res = await client.get("/style.css")
+    assert css_res.status_code == 200
+    assert "text/css" in css_res.headers.get("content-type", "")
+
+    js_res = await client.get("/app.js")
+    assert js_res.status_code == 200
+    assert "javascript" in js_res.headers.get("content-type", "")
 
 
 @pytest.mark.asyncio

@@ -129,23 +129,48 @@ async def _run_pipeline(
         exceeds_target=exceeds_target,
     )
 
-    # Determine answer
-    if final_state.get("is_off_topic"):
+    # Determine answer and grounding status
+    is_off_topic = final_state.get("is_off_topic", False)
+    has_sufficient_context = final_state.get("has_sufficient_context", False)
+    is_grounded = final_state.get("is_grounded", True)
+    refusal_phrases = (
+        "don't have enough context",
+        "do not have enough context",
+        "not enough context",
+        "not enough information",
+        "no information",
+        "cannot answer",
+        "can't answer",
+        "unable to answer",
+        "off-topic",
+    )
+
+    if is_off_topic:
         answer = "This question appears to be off-topic for this knowledge base. Please ask a factual question."
         guardrail_triggered = True
         guardrail_reason = "off_topic"
-    elif not final_state.get("has_sufficient_context", False):
+        is_grounded = False
+    elif not has_sufficient_context:
         answer = final_state.get("generated_answer", "Not enough context to answer.")
         guardrail_triggered = True
         guardrail_reason = "insufficient_context"
-    elif not final_state.get("is_grounded", True):
+        is_grounded = False
+    elif not is_grounded:
         answer = "The generated answer could not be verified against the source context. Please try rephrasing."
         guardrail_triggered = True
         guardrail_reason = "not_grounded"
+        is_grounded = False
     else:
-        answer = final_state.get("generated_answer", "No answer generated.")
-        guardrail_triggered = False
-        guardrail_reason = None
+        raw_answer = final_state.get("generated_answer", "No answer generated.")
+        answer = raw_answer
+        # Check if the generated answer itself is a refusal
+        if any(p in raw_answer.lower() for p in refusal_phrases):
+            is_grounded = False
+            guardrail_triggered = True
+            guardrail_reason = "insufficient_context"
+        else:
+            guardrail_triggered = False
+            guardrail_reason = None
 
     # Map retrieved chunks
     retrieved = []
@@ -174,7 +199,7 @@ async def _run_pipeline(
         source=source,
         retrieved_chunks=retrieved,
         timings=timings,
-        grounded=final_state.get("is_grounded", True),
+        grounded=is_grounded,
         guardrail_triggered=guardrail_triggered,
         guardrail_reason=guardrail_reason,
     )

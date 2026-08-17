@@ -38,9 +38,9 @@ async def generation_node(state: PipelineState) -> PipelineState:
         logger.info("generation_skipped", reason="insufficient_context")
         return state
 
-    # Build context string from retrieved chunks
+    # Build context string from top retrieved chunks (limit to 3 for low latency)
     context_parts = []
-    for i, chunk in enumerate(chunks, 1):
+    for i, chunk in enumerate(chunks[:3], 1):
         score = chunk.get("score", 0.0)
         text = chunk.get("text", "")
         context_parts.append(f"[Passage {i} | relevance: {score:.3f}]\n{text}")
@@ -65,8 +65,8 @@ async def generation_node(state: PipelineState) -> PipelineState:
                 logger.info(
                     "generation_complete",
                     model=model,
-                    answer_length=len(answer),
                     elapsed_ms=round(elapsed_ms, 2),
+                    answer_length=len(answer),
                     attempt=attempt + 1,
                 )
                 return state
@@ -98,7 +98,7 @@ async def _call_groq(query: str, context: str, model: str, settings) -> str:
         query=query,
     )
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
@@ -111,7 +111,7 @@ async def _call_groq(query: str, context: str, model: str, settings) -> str:
                     {"role": "system", "content": GENERATION_SYSTEM_PROMPT},
                     {"role": "user", "content": user_message},
                 ],
-                "max_tokens": 512,
+                "max_tokens": 180,
                 "temperature": 0.1,  # Low temp for factual grounding
                 "top_p": 0.9,
             },
