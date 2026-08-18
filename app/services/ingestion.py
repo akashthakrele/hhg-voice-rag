@@ -5,15 +5,15 @@ Streams data (no full 55.6GB download).
 
 from __future__ import annotations
 
-from typing import Any, Generator
+from collections.abc import Generator
+from typing import Any
 
 import structlog
 
-from app.core.config import get_settings
-from app.core.db import get_qdrant_client, ensure_collection_exists, recreate_collection
-from app.services.chunking import chunk_all_strategies, chunk_metadata_aware
 from app.agents.retrieval_node import get_embedder
-from app.schemas import ChunkStrategy
+from app.core.config import get_settings
+from app.core.db import ensure_collection_exists, get_qdrant_client, recreate_collection
+from app.services.chunking import chunk_metadata_aware
 
 logger = structlog.get_logger(__name__)
 
@@ -78,6 +78,7 @@ def stream_msmarco_xi(
     Yields dicts with keys: query, Eng_Query, passages, target_lang, source_lang, etc.
     """
     import os
+
     from datasets import load_dataset
 
     logger.info(
@@ -93,8 +94,8 @@ def stream_msmarco_xi(
 
     # 1. Fast path: load via cached ParquetFile using huggingface_hub
     try:
-        from huggingface_hub import hf_hub_download, try_to_load_from_cache
         import pyarrow.parquet as pq
+        from huggingface_hub import hf_hub_download, try_to_load_from_cache
 
         target_file = LANGUAGE_FILE_MAP.get(
             lang_clean,
@@ -194,7 +195,6 @@ def stream_msmarco_xi(
         # Post-loading language filtering if specified
         if lang_clean and lang_clean not in ("all", "any", "*"):
             target_lang = str(record.get("target_lang") or "").lower()
-            source_lang = str(record.get("source_lang") or "").lower()
 
             if lang_clean in ("en", "eng", "en-in", "en-us", "eng_latn"):
                 pass  # All MSMARCO-XI records contain English passages
@@ -248,9 +248,10 @@ async def ingest_to_qdrant(
     Returns:
         Summary dict with counts and timing.
     """
-    from qdrant_client.http.models import PointStruct
-    import uuid
     import time
+    import uuid
+
+    from qdrant_client.http.models import PointStruct
 
     if clear_existing:
         recreate_collection()

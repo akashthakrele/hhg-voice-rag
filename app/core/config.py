@@ -3,6 +3,7 @@ Core configuration — single source of truth for all env vars and settings.
 Uses pydantic-settings for validation + .env file loading.
 """
 
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -59,8 +60,6 @@ class Settings(BaseSettings):
     max_retries: int = 2
     retry_base_delay: float = 0.5
 
-
-import os
 
 @lru_cache
 def get_settings() -> Settings:

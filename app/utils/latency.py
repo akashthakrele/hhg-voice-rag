@@ -5,9 +5,10 @@ Every pipeline stage is timed and logged.
 
 from __future__ import annotations
 
-import time
 import functools
-from typing import Any, Callable
+import time
+from collections.abc import Callable
+from typing import Any
 
 import structlog
 

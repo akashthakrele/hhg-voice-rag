@@ -8,12 +8,9 @@ from __future__ import annotations
 import re
 import time
 
-import numpy as np
 import structlog
 
 from app.agents.state import PipelineState
-from app.agents.retrieval_node import get_embedder
-from app.core.config import get_settings
 
 logger = structlog.get_logger(__name__)
 

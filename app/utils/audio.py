@@ -6,7 +6,6 @@ Converts uploaded audio to the format expected by Sarvam STT API.
 from __future__ import annotations
 
 import io
-import tempfile
 from pathlib import Path
 
 import structlog

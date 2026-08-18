@@ -7,14 +7,12 @@ from __future__ import annotations
 
 import csv
 import io
-import time
-from typing import Any
 
 import numpy as np
 import structlog
 
-from app.services.pipeline import run_text_pipeline
 from app.schemas import BenchmarkResult, PipelineTimings
+from app.services.pipeline import run_text_pipeline
 
 logger = structlog.get_logger(__name__)
 

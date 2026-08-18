@@ -4,7 +4,8 @@ LangGraph shared state — the TypedDict that flows through all nodes.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
+
 from typing_extensions import TypedDict
 
 
@@ -16,23 +17,23 @@ class PipelineState(TypedDict, total=False):
     """
 
     # ── Input ───────────────────────────────────────────────
-    audio_bytes: Optional[bytes]          # Raw audio (voice path)
-    query_text: Optional[str]             # Transcribed or direct text query
-    language: str                         # BCP-47 language code
+    audio_bytes: bytes | None          # Raw audio (voice path)
+    query_text: str | None             # Transcribed or direct text query
+    language: str                      # BCP-47 language code
 
     # ── STT ─────────────────────────────────────────────────
-    transcript: Optional[str]             # STT output
+    transcript: str | None             # STT output
 
     # ── Guardrail: off-topic ────────────────────────────────
     is_off_topic: bool
-    off_topic_reason: Optional[str]
+    off_topic_reason: str | None
 
     # ── Retrieval ───────────────────────────────────────────
     retrieved_chunks: list[dict[str, Any]]  # [{text, score, metadata}, ...]
     has_sufficient_context: bool
 
     # ── Generation ──────────────────────────────────────────
-    generated_answer: Optional[str]
+    generated_answer: str | None
 
     # ── Guardrail: grounding ────────────────────────────────
     is_grounded: bool
@@ -40,5 +41,5 @@ class PipelineState(TypedDict, total=False):
 
     # ── Metadata ────────────────────────────────────────────
     timings: dict[str, float]             # stage_name → ms
-    error: Optional[str]
+    error: str | None
     retry_count: int

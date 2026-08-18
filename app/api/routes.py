@@ -4,23 +4,22 @@ API routes — FastAPI endpoints for voice upload, text query, health, benchmark
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from fastapi.responses import PlainTextResponse
 
+from app.core.db import check_qdrant_health, recreate_collection
+from app.exceptions import AudioValidationError, RAGPipelineError
 from app.schemas import (
-    VoiceQueryRequest,
-    TextQueryRequest,
-    RAGResponse,
-    HealthResponse,
     BenchmarkRequest,
     BenchmarkResult,
+    HealthResponse,
+    RAGResponse,
+    TextQueryRequest,
 )
-from app.services.pipeline import run_voice_pipeline, run_text_pipeline
 from app.services.benchmark import run_benchmark, timings_to_csv
 from app.services.ingestion import ingest_to_qdrant
-from app.core.db import check_qdrant_health, recreate_collection
+from app.services.pipeline import run_text_pipeline, run_voice_pipeline
 from app.utils.audio import preprocess_audio, validate_audio_size
-from app.exceptions import AudioValidationError, RAGPipelineError
 
 router = APIRouter()
 

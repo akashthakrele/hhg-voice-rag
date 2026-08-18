@@ -5,8 +5,6 @@ All pipeline-specific errors are defined here for consistent handling.
 
 from __future__ import annotations
 
-from typing import Optional
-
 
 class RAGPipelineError(Exception):
     """Base exception for all pipeline errors."""
@@ -38,19 +36,23 @@ class GenerationError(RAGPipelineError):
         super().__init__(message, stage="generation", retryable=True)
 
 
-class GuardrailTriggered(RAGPipelineError):
+class GuardrailTriggeredError(RAGPipelineError):
     """A guardrail check blocked the response."""
 
     def __init__(
         self,
         message: str = "Response blocked by guardrail",
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ):
         self.reason = reason or message
         super().__init__(message, stage="guardrail", retryable=False)
 
 
-class OffTopicError(GuardrailTriggered):
+# Backwards compatibility alias
+GuardrailTriggered = GuardrailTriggeredError
+
+
+class OffTopicError(GuardrailTriggeredError):
     """Query was classified as off-topic."""
 
     def __init__(self):
@@ -60,7 +62,7 @@ class OffTopicError(GuardrailTriggered):
         )
 
 
-class GroundingError(GuardrailTriggered):
+class GroundingError(GuardrailTriggeredError):
     """Generated answer is not grounded in retrieved context."""
 
     def __init__(self, similarity_score: float, threshold: float):
@@ -75,7 +77,7 @@ class GroundingError(GuardrailTriggered):
         self.threshold = threshold
 
 
-class InsufficientContextError(GuardrailTriggered):
+class InsufficientContextError(GuardrailTriggeredError):
     """Not enough relevant context to answer the query."""
 
     def __init__(self):

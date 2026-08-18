@@ -3,14 +3,13 @@ Tests for chunking strategies — verifies all 3 strategies produce
 valid chunks with correct metadata.
 """
 
-import pytest
 
+from app.schemas import ChunkStrategy
 from app.services.chunking import (
     chunk_fixed_size,
     chunk_metadata_aware,
     count_tokens,
 )
-from app.schemas import ChunkStrategy
 
 
 class TestFixedSizeChunking:

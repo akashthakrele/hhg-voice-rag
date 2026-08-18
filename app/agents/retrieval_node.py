@@ -14,7 +14,7 @@ from sentence_transformers import SentenceTransformer
 from app.agents.state import PipelineState
 from app.core.config import get_settings
 from app.core.db import get_qdrant_client
-from app.exceptions import RetrievalError, InsufficientContextError
+from app.exceptions import RetrievalError
 
 logger = structlog.get_logger(__name__)
 

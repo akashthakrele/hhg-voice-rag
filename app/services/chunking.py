@@ -10,8 +10,8 @@ from typing import Any
 import structlog
 import tiktoken
 
-from app.schemas import ChunkMetadata, ChunkStrategy
 from app.core.config import get_settings
+from app.schemas import ChunkMetadata, ChunkStrategy
 
 logger = structlog.get_logger(__name__)
 

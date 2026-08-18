@@ -12,14 +12,14 @@ import structlog
 
 from app.agents.graph import build_rag_graph
 from app.agents.state import PipelineState
+from app.core.config import get_settings
 from app.schemas import (
-    RAGResponse,
-    RetrievedChunk,
     ChunkMetadata,
     PipelineTimings,
     QuerySource,
+    RAGResponse,
+    RetrievedChunk,
 )
-from app.core.config import get_settings
 
 logger = structlog.get_logger(__name__)
 

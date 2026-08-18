@@ -5,16 +5,14 @@ Pydantic schemas for API request/response models and internal data structures.
 from __future__ import annotations
 
 import uuid
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
-
 
 # ── Enums ───────────────────────────────────────────────────
 
 
-class ChunkStrategy(str, Enum):
+class ChunkStrategy(StrEnum):
     """Chunking strategies tracked in metadata for analysis."""
 
     FIXED_SIZE = "fixed_size"
@@ -22,7 +20,7 @@ class ChunkStrategy(str, Enum):
     METADATA_AWARE = "metadata_aware"
 
 
-class QuerySource(str, Enum):
+class QuerySource(StrEnum):
     """How the query was submitted."""
 
     VOICE = "voice"
@@ -73,10 +71,10 @@ class RetrievedChunk(BaseModel):
 class PipelineTimings(BaseModel):
     """Per-stage latency breakdown in milliseconds."""
 
-    stt_ms: Optional[float] = None
-    retrieval_ms: Optional[float] = None
-    generation_ms: Optional[float] = None
-    guardrail_ms: Optional[float] = None
+    stt_ms: float | None = None
+    retrieval_ms: float | None = None
+    generation_ms: float | None = None
+    guardrail_ms: float | None = None
     total_ms: float = 0.0
     exceeds_target: bool = False
 
@@ -92,7 +90,7 @@ class RAGResponse(BaseModel):
     timings: PipelineTimings = Field(default_factory=PipelineTimings)
     grounded: bool = True
     guardrail_triggered: bool = False
-    guardrail_reason: Optional[str] = None
+    guardrail_reason: str | None = None
 
 
 class HealthResponse(BaseModel):

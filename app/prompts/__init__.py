@@ -3,9 +3,9 @@ from app.prompts.generation import (
     GENERATION_USER_TEMPLATE,
 )
 from app.prompts.guardrails import (
+    GROUNDING_CHECK_PROMPT,
     OFF_TOPIC_SYSTEM_PROMPT,
     OFF_TOPIC_USER_TEMPLATE,
-    GROUNDING_CHECK_PROMPT,
 )
 
 __all__ = [
