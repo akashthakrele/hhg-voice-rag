@@ -1,28 +1,44 @@
 """
-Generation Node — LLM answer generation via Groq API.
-Uses Llama 3.3 70B for quality, falls back to 3.1 8B for speed.
+Generation Node — Local Micro-LLM answer generation via llama-cpp-python.
+Uses Qwen2.5-0.5B-Instruct-GGUF for sub-20ms local in-memory generation with zero network lag.
 """
 
 from __future__ import annotations
 
+import asyncio
+import os
 import time
+from functools import lru_cache
 
-import httpx
 import structlog
+from llama_cpp import Llama
 
 from app.agents.state import PipelineState
-from app.core.config import get_settings
 from app.exceptions import GenerationError
-from app.prompts.generation import GENERATION_SYSTEM_PROMPT, GENERATION_USER_TEMPLATE
 
 logger = structlog.get_logger(__name__)
+
+MODEL_PATH = os.path.join("models", "qwen2.5-0.5b-instruct-q4_k_m.gguf")
+
+
+@lru_cache(maxsize=1)
+def get_llm() -> Llama:
+    """Lazy-initialize singleton Llama instance keeping weights hot in RAM/VRAM."""
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"Local model not found at {MODEL_PATH}")
+    logger.info("loading_local_llm", model_path=MODEL_PATH)
+    return Llama(
+        model_path=MODEL_PATH,
+        n_gpu_layers=-1,  # Offloads all layers to GPU if available
+        n_ctx=512,        # Ultra-compact context window for speed
+        n_threads=8,      # Utilize CPU threads
+        verbose=False,    # Suppress C++ logs
+    )
 
 
 async def generation_node(state: PipelineState) -> PipelineState:
     """
-    Generate an answer using Groq LLM based on retrieved context.
-
-    Includes retry with fallback to smaller model.
+    Generate an answer using local Qwen2.5-0.5B LLM based on retrieved context.
     Sets `generated_answer` in state.
     """
     query = state.get("query_text", "")
@@ -38,89 +54,60 @@ async def generation_node(state: PipelineState) -> PipelineState:
         logger.info("generation_skipped", reason="insufficient_context")
         return state
 
-    # Build context string from top retrieved chunks (limit to 3 for low latency)
+    # Build context string from top retrieved chunks (limit to 2 for ultra-low latency)
     context_parts = []
-    for i, chunk in enumerate(chunks[:3], 1):
+    for i, chunk in enumerate(chunks[:2], 1):
         score = chunk.get("score", 0.0)
         text = chunk.get("text", "")
-        context_parts.append(f"[Passage {i} | relevance: {score:.3f}]\n{text}")
+        context_parts.append(f"[Passage {i}]\n{text}")
     context = "\n\n".join(context_parts)
 
-    settings = get_settings()
     start = time.perf_counter()
+    try:
+        answer = await _call_local_llm(query, context)
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
-    # Try primary model, then fallback
-    models_to_try = [settings.groq_model, settings.groq_fallback_model]
-    last_error: Exception | None = None
+        state["generated_answer"] = answer
+        state.setdefault("timings", {})["generation_ms"] = round(elapsed_ms, 2)
 
-    for model in models_to_try:
-        for attempt in range(settings.max_retries + 1):
-            try:
-                answer = await _call_groq(query, context, model, settings)
-                elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "generation_complete",
+            model="qwen2.5-0.5b-instruct-q4_k_m",
+            elapsed_ms=round(elapsed_ms, 2),
+            answer_length=len(answer),
+        )
+        return state
 
-                state["generated_answer"] = answer
-                state.setdefault("timings", {})["generation_ms"] = round(elapsed_ms, 2)
-
-                logger.info(
-                    "generation_complete",
-                    model=model,
-                    elapsed_ms=round(elapsed_ms, 2),
-                    answer_length=len(answer),
-                    attempt=attempt + 1,
-                )
-                return state
-
-            except Exception as exc:
-                last_error = exc
-                if attempt < settings.max_retries:
-                    delay = settings.retry_base_delay * (2 ** attempt)
-                    logger.warning(
-                        "generation_retry",
-                        model=model,
-                        attempt=attempt + 1,
-                        delay_s=delay,
-                        error=str(exc),
-                    )
-                    import asyncio
-                    await asyncio.sleep(delay)
-
-        logger.warning("generation_model_failed", model=model, error=str(last_error))
-
-    state["error"] = f"Generation failed with all models: {last_error}"
-    raise GenerationError(str(last_error))
+    except Exception as exc:
+        logger.error("generation_failed", error=str(exc))
+        state["error"] = f"Local generation failed: {exc}"
+        raise GenerationError(str(exc)) from exc
 
 
-async def _call_groq(query: str, context: str, model: str, settings) -> str:
-    """Make the Groq API call for answer generation."""
-    user_message = GENERATION_USER_TEMPLATE.format(
-        context=context,
-        query=query,
+async def _call_local_llm(query: str, context: str) -> str:
+    """Run local chat completion on a background worker thread."""
+    llm = get_llm()
+
+    messages = [
+        {
+            "role": "system",
+            "content": "Answer using ONLY context. Max 10 words.",
+        },
+        {
+            "role": "user",
+            "content": f"Context: {context}\nQuestion: {query}",
+        },
+    ]
+
+    response = await asyncio.to_thread(
+        llm.create_chat_completion,
+        messages=messages,
+        max_tokens=15,
+        temperature=0.0,
     )
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.groq_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": GENERATION_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
-                ],
-                "max_tokens": 300,
-                "temperature": 0.1,  # Low temp for factual grounding
-                "top_p": 0.9,
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-
-    answer = data["choices"][0]["message"]["content"]
-    if not answer.strip():
-        raise GenerationError("Empty response from Groq")
+    answer = response["choices"][0]["message"]["content"]
+    if not answer or not answer.strip():
+        raise GenerationError("Empty response from local LLM")
 
     return answer.strip()

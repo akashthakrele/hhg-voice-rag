@@ -50,14 +50,13 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("qdrant_init_failed", error=str(exc))
 
-    # Initialize Hugging Face authentication
-    if settings.hf_token and settings.hf_token.strip():
-        try:
-            import huggingface_hub
-            huggingface_hub.login(token=settings.hf_token.strip(), add_to_git_credential=False)
-            logger.info("hf_token_configured")
-        except Exception as exc:
-            logger.debug("hf_login_skipped", error=str(exc))
+    # Warm up local LLM in background/startup to keep weights hot
+    try:
+        from app.agents.generation_node import get_llm
+        get_llm()
+        logger.info("local_llm_ready", model="qwen2.5-0.5b-instruct-q4_k_m")
+    except Exception as exc:
+        logger.warning("local_llm_init_failed", error=str(exc))
 
     yield
 
@@ -90,3 +89,4 @@ app.include_router(router, prefix="/api/v1")
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+# Reload trigger
