@@ -111,7 +111,7 @@ async def _call_groq(query: str, context: str, model: str, settings) -> str:
                     {"role": "system", "content": GENERATION_SYSTEM_PROMPT},
                     {"role": "user", "content": user_message},
                 ],
-                "max_tokens": 180,
+                "max_tokens": 300,
                 "temperature": 0.1,  # Low temp for factual grounding
                 "top_p": 0.9,
             },
