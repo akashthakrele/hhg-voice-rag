@@ -60,6 +60,16 @@ def chunk_fixed_size(
     tokenizer = _get_tokenizer()
 
     tokens = tokenizer.encode(text)
+    if not tokens:
+        metadata = ChunkMetadata(
+            source_doc_id=doc_id,
+            strategy=ChunkStrategy.FIXED_SIZE,
+            chunk_index=0,
+            total_chunks=1,
+            token_count=0,
+        )
+        return [{"text": "", "metadata": metadata}]
+
     chunks = []
     start = 0
 
