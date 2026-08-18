@@ -36,6 +36,14 @@ def get_llm() -> Llama:
     )
 
 
+def truncate_words(text: str, max_words: int = 150) -> str:
+    """Truncate text to at most max_words to minimize prompt prefill latency."""
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+    return " ".join(words[:max_words])
+
+
 async def generation_node(state: PipelineState) -> PipelineState:
     """
     Generate an answer using local Qwen2.5-0.5B LLM based on retrieved context.
@@ -54,13 +62,13 @@ async def generation_node(state: PipelineState) -> PipelineState:
         logger.info("generation_skipped", reason="insufficient_context")
         return state
 
-    # Build context string from top retrieved chunks (limit to 2 for ultra-low latency)
+    # Build context string from top 2 retrieved chunks and prune to <= 150 words
     context_parts = []
     for i, chunk in enumerate(chunks[:2], 1):
-        score = chunk.get("score", 0.0)
         text = chunk.get("text", "")
         context_parts.append(f"[Passage {i}]\n{text}")
-    context = "\n\n".join(context_parts)
+    raw_context = "\n\n".join(context_parts)
+    context = truncate_words(raw_context, max_words=150)
 
     start = time.perf_counter()
     try:
@@ -102,7 +110,7 @@ async def _call_local_llm(query: str, context: str) -> str:
     response = await asyncio.to_thread(
         llm.create_chat_completion,
         messages=messages,
-        max_tokens=15,
+        max_tokens=12,
         temperature=0.0,
     )
 

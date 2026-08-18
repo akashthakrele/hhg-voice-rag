@@ -50,13 +50,15 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("qdrant_init_failed", error=str(exc))
 
-    # Warm up local LLM in background/startup to keep weights hot
+    # Warm up local LLM and embedding model in startup to keep weights hot
     try:
         from app.agents.generation_node import get_llm
+        from app.agents.retrieval_node import get_embedder
         get_llm()
-        logger.info("local_llm_ready", model="qwen2.5-0.5b-instruct-q4_k_m")
+        get_embedder()
+        logger.info("models_prewarmed", llm="qwen2.5-0.5b-instruct-q4_k_m", embedder=settings.embedding_model)
     except Exception as exc:
-        logger.warning("local_llm_init_failed", error=str(exc))
+        logger.warning("models_warmup_failed", error=str(exc))
 
     yield
 

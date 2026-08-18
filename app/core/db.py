@@ -1,6 +1,7 @@
 """
 Database client initialization — Qdrant vector store connection.
 Lazy-init pattern: call get_qdrant_client() to get the singleton.
+Uses gRPC (port 6334) for ultra-fast binary vector retrieval.
 """
 
 from qdrant_client import QdrantClient
@@ -12,11 +13,20 @@ _client: QdrantClient | None = None
 
 
 def get_qdrant_client() -> QdrantClient:
-    """Return a singleton Qdrant client instance."""
+    """Return a singleton Qdrant client instance with gRPC enabled."""
     global _client
     if _client is None:
         settings = get_settings()
-        _client = QdrantClient(url=settings.qdrant_url, timeout=10)
+        try:
+            _client = QdrantClient(
+                url=settings.qdrant_url,
+                grpc_port=6334,
+                prefer_grpc=True,
+                timeout=10,
+            )
+        except Exception:
+            # Fallback to HTTP if gRPC is not reachable
+            _client = QdrantClient(url=settings.qdrant_url, timeout=10)
     return _client
 
 
@@ -40,7 +50,7 @@ async def check_qdrant_health() -> dict:
 def ensure_collection_exists() -> None:
     """
     Create the MSMARCO-XI collection if it doesn't exist yet.
-    Uses cosine distance for multilingual-e5-large embeddings.
+    Uses cosine distance for multilingual-e5-large embeddings with in-memory vectors.
     """
     from qdrant_client.http.models import Distance, VectorParams
 
@@ -54,6 +64,7 @@ def ensure_collection_exists() -> None:
             vectors_config=VectorParams(
                 size=settings.embedding_dimension,
                 distance=Distance.COSINE,
+                on_disk=False,
             ),
         )
 
@@ -77,5 +88,6 @@ def recreate_collection(collection_name: str | None = None) -> None:
         vectors_config=VectorParams(
             size=settings.embedding_dimension,
             distance=Distance.COSINE,
+            on_disk=False,
         ),
     )

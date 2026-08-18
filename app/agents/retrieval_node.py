@@ -1,11 +1,13 @@
 """
 Retrieval Node — embed query + vector search against Qdrant.
-Uses multilingual-e5-large for query embedding.
+Uses multilingual-e5-large with in-memory embedding LRU cache and gRPC.
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
+from functools import lru_cache
 from typing import Any
 
 import structlog
@@ -32,10 +34,17 @@ def get_embedder() -> SentenceTransformer:
     return _embedder
 
 
+@lru_cache(maxsize=1024)
+def _get_cached_query_vector(prefixed_query: str) -> tuple[float, ...]:
+    """Compute and cache normalized query embedding vector."""
+    embedder = get_embedder()
+    vec = embedder.encode(prefixed_query, normalize_embeddings=True)
+    return tuple(vec.tolist())
+
+
 async def retrieval_node(state: PipelineState) -> PipelineState:
     """
     Embed the query and retrieve top-K chunks from Qdrant.
-
     Sets `retrieved_chunks` and `has_sufficient_context` in state.
     """
     query = state.get("query_text", "")
@@ -51,13 +60,15 @@ async def retrieval_node(state: PipelineState) -> PipelineState:
         # multilingual-e5-large expects "query: " prefix for queries
         prefixed_query = f"query: {query}"
 
-        embedder = get_embedder()
-        query_vector = embedder.encode(prefixed_query, normalize_embeddings=True).tolist()
+        # Fast cached query vector encoding in worker thread
+        query_vector = await asyncio.to_thread(_get_cached_query_vector, prefixed_query)
 
         client = get_qdrant_client()
-        results = client.search(
+        # Search Qdrant with top-2 limit
+        results = await asyncio.to_thread(
+            client.search,
             collection_name=settings.qdrant_collection,
-            query_vector=query_vector,
+            query_vector=list(query_vector),
             limit=settings.retrieval_top_k,
             with_payload=True,
         )
@@ -85,7 +96,6 @@ async def retrieval_node(state: PipelineState) -> PipelineState:
             elapsed_ms=round(elapsed_ms, 2),
         )
 
-        # Explicit insufficient context fallback
         if not state["has_sufficient_context"]:
             logger.warning(
                 "insufficient_context",

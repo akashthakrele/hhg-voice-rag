@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     sarvam_stt_language: str = "hi-IN"
 
     # ── Retrieval ───────────────────────────────────────────
-    retrieval_top_k: int = 5
+    retrieval_top_k: int = 2
     grounding_similarity_threshold: float = 0.45
 
     # ── Retry ───────────────────────────────────────────────
