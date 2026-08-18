@@ -37,6 +37,7 @@ def _get_graph():
 async def run_voice_pipeline(
     audio_bytes: bytes,
     language: str = "hi-IN",
+    audio_format: str = "wav",
 ) -> RAGResponse:
     """
     Full voice pipeline: audio → STT → guardrail → retrieve → generate → grounding check.
@@ -46,6 +47,7 @@ async def run_voice_pipeline(
         query_text=None,
         language=language,
         source=QuerySource.VOICE,
+        audio_format=audio_format,
     )
 
 
@@ -70,6 +72,7 @@ async def _run_pipeline(
     query_text: str | None,
     language: str,
     source: QuerySource,
+    audio_format: str = "wav",
 ) -> RAGResponse:
     """
     Internal pipeline runner — invokes the LangGraph and maps state to response.
@@ -81,6 +84,7 @@ async def _run_pipeline(
     # Build initial state
     initial_state: PipelineState = {
         "audio_bytes": audio_bytes,
+        "audio_format": audio_format,
         "query_text": query_text,
         "language": language,
         "is_off_topic": False,

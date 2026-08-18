@@ -5,7 +5,6 @@ Includes retry logic with exponential backoff.
 
 from __future__ import annotations
 
-import base64
 import time
 
 import httpx
@@ -41,7 +40,9 @@ async def stt_node(state: PipelineState) -> PipelineState:
 
     for attempt in range(settings.max_retries + 1):
         try:
-            transcript = await _call_sarvam_stt(audio_bytes, settings)
+            transcript = await _call_sarvam_stt(
+                audio_bytes, settings, audio_format=state.get("audio_format", "wav")
+            )
             elapsed_ms = (time.perf_counter() - start) * 1000
 
             state["transcript"] = transcript
@@ -73,37 +74,48 @@ async def stt_node(state: PipelineState) -> PipelineState:
     raise STTError(str(last_error))
 
 
-async def _call_sarvam_stt(audio_bytes: bytes, settings) -> str:
-    """Make the actual Sarvam STT API call."""
-    audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
-
-    payload = {
-        "input": audio_b64,
-        "config": {
-            "language": {"sourceLanguage": settings.sarvam_stt_language},
-            "audioFormat": "wav",
-            "encoding": "base64",
-        },
+async def _call_sarvam_stt(audio_bytes: bytes, settings, audio_format: str = "wav") -> str:
+    """Make the actual Sarvam STT API call using multipart form-data."""
+    # Map format to appropriate file extension for MIME type
+    ext_to_mime = {
+        "wav": "audio/wav",
+        "webm": "audio/webm",
+        "ogg": "audio/ogg",
+        "mp3": "audio/mpeg",
+        "m4a": "audio/mp4",
+        "mp4": "audio/mp4",
+        "flac": "audio/flac",
+        "aac": "audio/aac",
     }
+    mime_type = ext_to_mime.get(audio_format, "audio/wav")
+    filename = f"audio.{audio_format}"
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             settings.sarvam_stt_url,
-            json=payload,
             headers={
-                "Content-Type": "application/json",
-                "API-Subscription-Key": settings.sarvam_api_key,
+                "api-subscription-key": settings.sarvam_api_key,
+            },
+            files={
+                "file": (filename, audio_bytes, mime_type),
+            },
+            data={
+                "model": "saaras:v3",
+                "language_code": settings.sarvam_stt_language,
             },
         )
         response.raise_for_status()
         data = response.json()
 
-    transcript = data.get("output", [{}])[0].get("source", "")
+    # Try multiple response format keys for compatibility
+    transcript = data.get("transcript", "")
     if not transcript:
-        # Try alternate response format
-        transcript = data.get("transcript", data.get("text", ""))
+        transcript = data.get("text", "")
+    if not transcript:
+        # Legacy format fallback
+        transcript = data.get("output", [{}])[0].get("source", "")
 
     if not transcript:
-        raise STTError("Empty transcript returned from Sarvam API")
+        raise STTError(f"Empty transcript returned from Sarvam API. Response: {data}")
 
     return transcript.strip()

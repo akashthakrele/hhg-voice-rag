@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # ── Sarvam STT ──────────────────────────────────────────
-    sarvam_stt_url: str = "https://api.sarvam.ai/speech-to-text-translate"
+    sarvam_stt_url: str = "https://api.sarvam.ai/speech-to-text"
     sarvam_stt_language: str = "hi-IN"
 
     # ── Retrieval ───────────────────────────────────────────

@@ -1,66 +1,46 @@
 """
 Audio preprocessing utilities.
-Converts uploaded audio to the format expected by Sarvam STT API.
+Sarvam STT API natively supports WAV, WebM, OGG, MP3, etc.
+so we pass raw bytes through and just detect the format for the API call.
 """
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
 
 import structlog
 
 logger = structlog.get_logger(__name__)
 
-# Sarvam expects: WAV, 16kHz, mono, 16-bit PCM
-TARGET_SAMPLE_RATE = 16000
-TARGET_CHANNELS = 1
+# Formats natively supported by Sarvam STT API — no conversion needed
+SARVAM_SUPPORTED_FORMATS = {"wav", "mp3", "ogg", "webm", "m4a", "flac", "aac", "mp4", "opus"}
 
 
-async def preprocess_audio(audio_bytes: bytes, filename: str = "audio") -> bytes:
+async def preprocess_audio(audio_bytes: bytes, filename: str = "audio") -> tuple[bytes, str]:
     """
-    Normalize uploaded audio to WAV format suitable for STT.
+    Validate and detect format of uploaded audio for Sarvam STT API.
+
+    Sarvam natively supports WebM, WAV, MP3, OGG, etc.,
+    so we pass raw bytes through without conversion (no pydub/ffmpeg needed).
 
     Args:
         audio_bytes: Raw uploaded audio bytes.
         filename: Original filename (used to detect format).
 
     Returns:
-        Normalized WAV bytes (16kHz, mono, 16-bit PCM).
+        Tuple of (audio_bytes, detected_format).
     """
-    from pydub import AudioSegment
-
     # Detect format from extension
     ext = Path(filename).suffix.lower().lstrip(".")
-    if ext not in ("wav", "mp3", "ogg", "webm", "m4a", "flac"):
+    if ext not in SARVAM_SUPPORTED_FORMATS:
         ext = "wav"  # fallback
-
-    try:
-        audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=ext)
-    except Exception:
-        logger.warning("audio_format_detection_failed", filename=filename, fallback="wav")
-        audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format="wav")
-
-    # Normalize
-    audio = (
-        audio
-        .set_frame_rate(TARGET_SAMPLE_RATE)
-        .set_channels(TARGET_CHANNELS)
-        .set_sample_width(2)  # 16-bit
-    )
-
-    # Export to WAV bytes
-    buf = io.BytesIO()
-    audio.export(buf, format="wav")
-    buf.seek(0)
 
     logger.info(
         "audio_preprocessed",
         original_format=ext,
-        duration_ms=len(audio),
-        sample_rate=TARGET_SAMPLE_RATE,
+        size_bytes=len(audio_bytes),
     )
-    return buf.read()
+    return audio_bytes, ext
 
 
 def validate_audio_size(audio_bytes: bytes, max_mb: float = 25.0) -> None:

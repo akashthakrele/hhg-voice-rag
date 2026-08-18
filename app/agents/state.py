@@ -18,6 +18,7 @@ class PipelineState(TypedDict, total=False):
 
     # ── Input ───────────────────────────────────────────────
     audio_bytes: bytes | None          # Raw audio (voice path)
+    audio_format: str                  # Audio format (wav, webm, ogg, mp3, etc.)
     query_text: str | None             # Transcribed or direct text query
     language: str                      # BCP-47 language code
 

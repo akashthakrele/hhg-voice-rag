@@ -55,9 +55,9 @@ async def voice_query(
     try:
         audio_bytes = await file.read()
         validate_audio_size(audio_bytes)
-        processed_audio = await preprocess_audio(audio_bytes, file.filename or "audio.wav")
+        processed_audio, audio_format = await preprocess_audio(audio_bytes, file.filename or "audio.wav")
 
-        response = await run_voice_pipeline(processed_audio, language)
+        response = await run_voice_pipeline(processed_audio, language, audio_format=audio_format)
         return response
 
     except AudioValidationError as exc:
