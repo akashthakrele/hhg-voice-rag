@@ -9,17 +9,21 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11"]
+
+    services:
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+          - 6334:6334
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Cache pip dependencies
         uses: actions/cache@v4
@@ -32,6 +36,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
           pip install -r requirements.txt
 
       - name: Lint with Ruff
@@ -40,8 +45,9 @@ jobs:
 
       - name: Run tests
         env:
+          ENV: test
           SARVAM_API_KEY: test_key
           GROQ_API_KEY: test_key
           QDRANT_URL: http://localhost:6333
         run: |
-          pytest tests/ -v --tb=short
+          pytest tests/ -v

@@ -28,11 +28,18 @@ Thumbs.db
 # Qdrant data (local)
 qdrant_data/
 
-# Model cache
+# Model cache & local models
 model_cache/
+models/
 
 # Benchmark outputs
 benchmarks/*.csv
+latency_report.json
+
+# Scratch scripts
+test_quick.py
+test_streaming.py
+test_voice.py
 
 # Logs
 logs/
