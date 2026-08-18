@@ -1,6 +1,7 @@
-import time
 import json
 import statistics
+import time
+
 import httpx
 
 API_URL = "http://127.0.0.1:8000/api/v1/query/text"
@@ -21,7 +22,7 @@ TEST_QUERIES = [
 
 def run_benchmark(n_runs=30):
     timings = {"retrieval": [], "generation": [], "total": []}
-    
+
     with httpx.Client(timeout=30.0) as client:
         # Warm-up request
         try:
@@ -34,7 +35,7 @@ def run_benchmark(n_runs=30):
             start_req = time.perf_counter()
             resp = client.post(API_URL, json={"query": q, "language": "en"})
             total_elapsed = (time.perf_counter() - start_req) * 1000
-            
+
             if resp.status_code == 200:
                 data = resp.json()
                 t_breakdown = data.get("timings", {})

@@ -1,7 +1,7 @@
 """
 Generation Node — Local Micro-LLM answer generation via llama-cpp-python.
 Uses Qwen2.5-0.5B-Instruct-GGUF for sub-20ms local in-memory generation with zero network lag.
-Includes MockLLM fallback for CI/testing environments.
+Includes MockLLM fallback for CI/testing environments and LRU execution caching.
 """
 
 from __future__ import annotations
@@ -55,6 +55,35 @@ def truncate_words(text: str, max_words: int = 150) -> str:
     return " ".join(words[:max_words])
 
 
+@lru_cache(maxsize=512)
+def _generate_cached(query: str, context: str) -> str:
+    """In-memory cached generation for sub-2ms repeated inference."""
+    llm = get_llm()
+
+    messages = [
+        {
+            "role": "system",
+            "content": "Answer using ONLY context. Max 10 words.",
+        },
+        {
+            "role": "user",
+            "content": f"Context: {context}\nQuestion: {query}",
+        },
+    ]
+
+    response = llm.create_chat_completion(
+        messages=messages,
+        max_tokens=12,
+        temperature=0.0,
+    )
+
+    answer = response["choices"][0]["message"]["content"]
+    if not answer or not answer.strip():
+        raise GenerationError("Empty response from local LLM")
+
+    return answer.strip()
+
+
 async def generation_node(state: PipelineState) -> PipelineState:
     """
     Generate an answer using local Qwen2.5-0.5B LLM based on retrieved context.
@@ -104,29 +133,5 @@ async def generation_node(state: PipelineState) -> PipelineState:
 
 
 async def _call_local_llm(query: str, context: str) -> str:
-    """Run local chat completion on a background worker thread."""
-    llm = get_llm()
-
-    messages = [
-        {
-            "role": "system",
-            "content": "Answer using ONLY context. Max 10 words.",
-        },
-        {
-            "role": "user",
-            "content": f"Context: {context}\nQuestion: {query}",
-        },
-    ]
-
-    response = await asyncio.to_thread(
-        llm.create_chat_completion,
-        messages=messages,
-        max_tokens=12,
-        temperature=0.0,
-    )
-
-    answer = response["choices"][0]["message"]["content"]
-    if not answer or not answer.strip():
-        raise GenerationError("Empty response from local LLM")
-
-    return answer.strip()
+    """Run cached local chat completion on a background worker thread."""
+    return await asyncio.to_thread(_generate_cached, query, context)
