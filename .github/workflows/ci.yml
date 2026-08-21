@@ -32,7 +32,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
           pip install ruff pytest httpx
-          pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
           pip install -r requirements.txt
 
       - name: Lint with Ruff

@@ -1,137 +1,122 @@
 """
-Generation Node — Local Micro-LLM answer generation via llama-cpp-python.
-Uses Qwen2.5-0.5B-Instruct-GGUF for sub-20ms local in-memory generation with zero network lag.
-Includes MockLLM fallback for CI/testing environments and LRU execution caching.
+Generation Node — LLM answer generation using Groq cloud API.
+Uses lru_cache for repeated queries and MockLLM for CI testing.
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
 import time
 from functools import lru_cache
 
 import structlog
+from dotenv import load_dotenv
 
 from app.agents.state import PipelineState
-from app.exceptions import GenerationError
+from app.prompts.generation import GENERATION_SYSTEM_PROMPT, GENERATION_USER_TEMPLATE
 
+load_dotenv()
 logger = structlog.get_logger(__name__)
 
-MODEL_PATH = os.getenv("MODEL_PATH", os.path.join("models", "qwen2.5-0.5b-instruct-q4_k_m.gguf"))
+
+# ── LLM Client Setup ──────────────────────────────────────────
+
+_ENV = os.getenv("ENV", "production")
 
 
-class MockLLM:
-    """Mock LLM for CI test environments without downloaded GGUF weights."""
+class _MockLLM:
+    """Lightweight mock for CI / unit-test environments."""
 
-    def create_chat_completion(self, messages, max_tokens=15, temperature=0.0):
-        return {"choices": [{"message": {"content": "Mocked answer for CI testing."}}]}
+    def create(self, *, messages, model, temperature, max_tokens):  # noqa: ARG002
+        class _Choice:
+            class _Msg:
+                content = "Mocked answer for CI testing."
+            message = _Msg()
+        class _Resp:
+            choices = [_Choice()]
+        return _Resp()
 
 
-@lru_cache(maxsize=1)
+if _ENV == "test":
+    # CI / pytest – never call a real API
+    class _MockCompletions:
+        @staticmethod
+        def create(*, messages, model, temperature, max_tokens=100):  # noqa: ARG004
+            return _MockLLM().create(
+                messages=messages, model=model,
+                temperature=temperature, max_tokens=max_tokens,
+            )
+
+    class _MockChat:
+        completions = _MockCompletions()
+
+    class _MockClient:
+        chat = _MockChat()
+
+    _client = _MockClient()
+else:
+    from groq import Groq
+    _client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+
 def get_llm():
-    """Lazy-initialize singleton Llama instance keeping weights hot in RAM/VRAM."""
-    if os.getenv("ENV") == "test" or not os.path.exists(MODEL_PATH):
-        logger.info("using_mock_llm", env=os.getenv("ENV"), model_exists=os.path.exists(MODEL_PATH))
-        return MockLLM()
-
-    from llama_cpp import Llama
-
-    logger.info("loading_local_llm", model_path=MODEL_PATH)
-    return Llama(
-        model_path=MODEL_PATH,
-        n_gpu_layers=-1,  # Offloads all layers to GPU if available
-        n_ctx=512,        # Ultra-compact context window for speed
-        n_threads=8,      # Utilize CPU threads
-        verbose=False,    # Suppress C++ logs
-    )
+    """Return the Groq client (or mock). Used by main.py startup warmup."""
+    return _client
 
 
-def truncate_words(text: str, max_words: int = 150) -> str:
-    """Truncate text to at most max_words to minimize prompt prefill latency."""
-    words = text.split()
-    if len(words) <= max_words:
-        return text
-    return " ".join(words[:max_words])
+# ── Cached Generation ─────────────────────────────────────────
 
+@lru_cache(maxsize=1024)
+def _cached_groq_generation(query: str, context: str) -> str:
+    """Call Groq API with caching on (query, context) pairs."""
+    user_prompt = GENERATION_USER_TEMPLATE.format(context=context, query=query)
 
-@lru_cache(maxsize=512)
-def _generate_cached(query: str, context: str) -> str:
-    """In-memory cached generation for sub-2ms repeated inference."""
-    llm = get_llm()
-
-    messages = [
-        {
-            "role": "system",
-            "content": "Answer using ONLY context. Max 10 words.",
-        },
-        {
-            "role": "user",
-            "content": f"Context: {context}\nQuestion: {query}",
-        },
-    ]
-
-    response = llm.create_chat_completion(
-        messages=messages,
-        max_tokens=12,
+    response = _client.chat.completions.create(
+        messages=[
+            {"role": "system", "content": GENERATION_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        model="llama-3.1-8b-instant",
         temperature=0.0,
+        max_tokens=100,
     )
+    return response.choices[0].message.content
 
-    answer = response["choices"][0]["message"]["content"]
-    if not answer or not answer.strip():
-        raise GenerationError("Empty response from local LLM")
 
-    return answer.strip()
-
+# ── LangGraph Node ─────────────────────────────────────────────
 
 async def generation_node(state: PipelineState) -> PipelineState:
     """
-    Generate an answer using local Qwen2.5-0.5B LLM based on retrieved context.
-    Sets `generated_answer` in state.
+    LangGraph generation node.
+    Reads query_text + retrieved_chunks → sets generated_answer + timings.
     """
-    query = state.get("query_text", "")
+    query = state.get("query_text", "") or ""
     chunks = state.get("retrieved_chunks", [])
 
-    # Check if we have sufficient context
-    if not state.get("has_sufficient_context", False):
-        state["generated_answer"] = (
-            "I don't have enough context in the knowledge base to answer "
-            "this question accurately. Please try rephrasing your question "
-            "or asking about a different topic."
-        )
-        logger.info("generation_skipped", reason="insufficient_context")
-        return state
-
-    # Build context string from top 2 retrieved chunks and prune to <= 150 words
+    # Build context from retrieved chunks
     context_parts = []
-    for i, chunk in enumerate(chunks[:2], 1):
-        text = chunk.get("text", "")
-        context_parts.append(f"[Passage {i}]\n{text}")
-    raw_context = "\n\n".join(context_parts)
-    context = truncate_words(raw_context, max_words=150)
+    for i, chunk in enumerate(chunks, 1):
+        context_parts.append(f"[Passage {i}]: {chunk.get('text', '')}")
+    context = "\n".join(context_parts) if context_parts else ""
 
     start = time.perf_counter()
+
     try:
-        answer = await _call_local_llm(query, context)
-        elapsed_ms = (time.perf_counter() - start) * 1000
-
-        state["generated_answer"] = answer
-        state.setdefault("timings", {})["generation_ms"] = round(elapsed_ms, 2)
-
-        logger.info(
-            "generation_complete",
-            model="qwen2.5-0.5b-instruct-q4_k_m",
-            elapsed_ms=round(elapsed_ms, 2),
-            answer_length=len(answer),
-        )
-        return state
-
+        answer = _cached_groq_generation(query, context)
     except Exception as exc:
         logger.error("generation_failed", error=str(exc))
-        state["error"] = f"Local generation failed: {exc}"
-        raise GenerationError(str(exc)) from exc
+        answer = f"Generation error: {exc}"
 
+    elapsed_ms = (time.perf_counter() - start) * 1000
 
-async def _call_local_llm(query: str, context: str) -> str:
-    """Run cached local chat completion on a background worker thread."""
-    return await asyncio.to_thread(_generate_cached, query, context)
+    state["generated_answer"] = answer
+    state.setdefault("timings", {})["generation_ms"] = round(elapsed_ms, 2)
+
+    logger.info(
+        "generation_complete",
+        answer_length=len(answer),
+        elapsed_ms=round(elapsed_ms, 2),
+        cached=elapsed_ms < 1.0,
+    )
+
+    return state
