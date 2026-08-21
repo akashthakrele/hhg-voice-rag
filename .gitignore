@@ -36,10 +36,11 @@ models/
 benchmarks/*.csv
 latency_report.json
 
-# Scratch scripts
+# Scratch scripts & test media
 test_quick.py
 test_streaming.py
 test_voice.py
+*.wav
 
 # Logs
 logs/
