@@ -135,9 +135,9 @@ def check_grounding_fast(
     overlap_ratio = overlap / len(answer_tokens)
     top_score = float(chunks[0].get("score", 0.0))
 
-    # Grounded if strong token overlap and high retrieval similarity
-    is_grounded = (overlap_ratio >= 0.35 or has_citation) and top_score >= 0.80
+    # Grounded if grounding_score meets cutoff threshold (0.50) or contains valid citation
     grounding_score = round(0.5 * overlap_ratio + 0.5 * top_score, 4)
+    is_grounded = (grounding_score >= 0.50) or (has_citation and top_score >= 0.70)
 
     return is_grounded, grounding_score
 

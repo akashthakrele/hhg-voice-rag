@@ -160,7 +160,7 @@ async def _run_pipeline(
         guardrail_reason = "insufficient_context"
         is_grounded = False
     elif not is_grounded:
-        answer = "The generated answer could not be verified against the source context. Please try rephrasing."
+        answer = "I don't have enough grounded context to answer this reliably."
         guardrail_triggered = True
         guardrail_reason = "not_grounded"
         is_grounded = False
