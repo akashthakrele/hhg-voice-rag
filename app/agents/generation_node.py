@@ -80,9 +80,13 @@ def _cached_groq_generation(query: str, context: str) -> str:
         ],
         model=model_name,
         temperature=0.0,
-        max_tokens=100,
+        max_tokens=350,
     )
-    return response.choices[0].message.content
+    msg = response.choices[0].message
+    content = (msg.content or "").strip()
+    if not content and getattr(msg, "reasoning", None):
+        content = (msg.reasoning or "").strip()
+    return content
 
 
 # ── LangGraph Node ─────────────────────────────────────────────
