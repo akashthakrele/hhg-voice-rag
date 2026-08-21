@@ -155,7 +155,7 @@ async def _run_pipeline(
         guardrail_reason = "off_topic"
         is_grounded = False
     elif not has_sufficient_context:
-        answer = final_state.get("generated_answer", "Not enough context to answer.")
+        answer = final_state.get("generated_answer") or "Not enough context to answer."
         guardrail_triggered = True
         guardrail_reason = "insufficient_context"
         is_grounded = False
@@ -165,7 +165,7 @@ async def _run_pipeline(
         guardrail_reason = "not_grounded"
         is_grounded = False
     else:
-        raw_answer = final_state.get("generated_answer", "No answer generated.")
+        raw_answer = final_state.get("generated_answer") or "No answer generated."
         answer = raw_answer
         # Check if the generated answer itself is a refusal
         if any(p in raw_answer.lower() for p in refusal_phrases):
