@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
         from app.agents.retrieval_node import get_embedder
         get_llm()
         get_embedder()
-        logger.info("models_prewarmed", llm="qwen2.5-0.5b-instruct-q4_k_m", embedder=settings.embedding_model)
+        logger.info("models_prewarmed", llm=settings.groq_model, embedder=settings.embedding_model)
     except Exception as exc:
         logger.warning("models_warmup_failed", error=str(exc))
 

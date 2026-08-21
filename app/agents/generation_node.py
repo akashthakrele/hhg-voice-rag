@@ -56,7 +56,8 @@ if _ENV == "test":
     _client = _MockClient()
 else:
     from groq import Groq
-    _client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    _api_key = (os.getenv("GROQ_API_KEY") or "").strip()
+    _client = Groq(api_key=_api_key)
 
 
 def get_llm():
@@ -70,13 +71,14 @@ def get_llm():
 def _cached_groq_generation(query: str, context: str) -> str:
     """Call Groq API with caching on (query, context) pairs."""
     user_prompt = GENERATION_USER_TEMPLATE.format(context=context, query=query)
+    model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b").strip()
 
     response = _client.chat.completions.create(
         messages=[
             {"role": "system", "content": GENERATION_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        model="llama-3.1-8b-instant",
+        model=model_name,
         temperature=0.0,
         max_tokens=100,
     )
